@@ -40,26 +40,26 @@ Manual entry always works without ChatGPT connected.
 ```mermaid
 flowchart TB
   subgraph client [Browser]
-    Pages[App Router Pages]
-    ClientUI[Client Components]
+    Pages[AppRouterPages]
+    ClientUI[ClientComponents]
   end
 
   subgraph vercel [Vercel]
-    MW[Middleware Session Refresh]
-    RSC[Server Components]
-    SA[Server Actions]
-    ExtractAPI["POST /api/extract"]
-    CodexAPI["/api/codex/auth/*"]
-    CronAPI["GET /api/cron/cleanup"]
+    MW[Middleware]
+    RSC[ServerComponents]
+    SA[ServerActions]
+    ExtractAPI[ExtractAPI]
+    CodexAPI[CodexAuthAPI]
+    CronAPI[CronCleanupAPI]
   end
 
   subgraph supabase [Supabase]
-    Auth[Auth JWT]
-    PG["Postgres + RLS"]
+    Auth[AuthJWT]
+    PG[PostgresRLS]
   end
 
-  subgraph openai [OpenAI Codex]
-    SSE[Codex SSE API]
+  subgraph openai [OpenAICodex]
+    SSE[CodexSSE]
   end
 
   Pages --> MW
@@ -77,6 +77,8 @@ flowchart TB
 ```
 
 See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for component-level detail.
+
+Route labels: `POST /api/extract`, `/api/codex/auth/*`, `GET /api/cron/cleanup-extraction-usage`.
 
 ---
 
