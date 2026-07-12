@@ -17,7 +17,8 @@ const PUBLIC_BRANCH = "public-main";
 const DEFAULT_SOURCE = "main";
 
 function run(cmd, options = {}) {
-  return execSync(cmd, { encoding: "utf8", stdio: options.stdio ?? "pipe" }).trim();
+  const result = execSync(cmd, { encoding: "utf8", stdio: options.stdio ?? "pipe" });
+  return typeof result === "string" ? result.trim() : "";
 }
 
 function runOrFail(cmd) {
