@@ -1,0 +1,2 @@
+export const BURST_EXTRACTIONS_PER_MINUTE = 20;
+export const BURST_WINDOW_MS = 60_000;
