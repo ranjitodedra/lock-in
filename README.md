@@ -1,4 +1,9 @@
-# Lock-In — AI Job Application Tracker
+
+<p align="center">
+  <img src="./public/logo_dark_mode.png" alt="Lock-In logo" width="280" />
+</p>
+
+<h1 align="center">Lock-In</h1>
 
 Track job applications in a focused dashboard. Paste a job description and AI extracts structured fields using **your ChatGPT subscription** — the app owner pays zero API costs.
 
