@@ -129,10 +129,11 @@ export function ApplicationForm({
   const [connected, setConnected] = useState(chatGptConnected);
   const [followUpWasSuggested, setFollowUpWasSuggested] = useState(false);
   const [isPending, startTransition] = useTransition();
-  const mountedAtRef = useRef(Date.now());
+  const mountedAtRef = useRef(0);
   const extractAbortRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
+    mountedAtRef.current = Date.now();
     return () => {
       extractAbortRef.current?.abort();
     };

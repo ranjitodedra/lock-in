@@ -2,7 +2,7 @@
 
 import { FileText, LayoutDashboard } from "lucide-react";
 import Image from "next/image";
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useLayoutEffect, useRef, useState } from "react";
 
 import { FadeInView } from "@/components/motion/fade-in-view";
 import { useReducedMotion } from "@/lib/motion/use-reduced-motion";
@@ -55,7 +55,8 @@ export function WorkflowPipeline() {
   const cardRef = useRef<HTMLDivElement>(null);
   const iconRefs = useRef<(HTMLDivElement | null)[]>([]);
   const [paths, setPaths] = useState({ track1: "", flow1: "", track2: "", flow2: "" });
-  const [animating, setAnimating] = useState(!reducedMotion);
+  const [userAnimating, setUserAnimating] = useState(true);
+  const animating = reducedMotion ? false : userAnimating;
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
 
   const drawBeams = useCallback(() => {
@@ -107,10 +108,6 @@ export function WorkflowPipeline() {
     };
   }, [drawBeams]);
 
-  useEffect(() => {
-    if (reducedMotion) setAnimating(false);
-  }, [reducedMotion]);
-
   function flowOpacity(beamIndex: 0 | 1): number {
     if (!animating) return 0.3;
     if (hoveredIndex === null) return 1;
@@ -144,7 +141,7 @@ export function WorkflowPipeline() {
               role="switch"
               aria-checked={animating}
               aria-label="Toggle flow animation"
-              onClick={() => setAnimating((v) => !v)}
+              onClick={() => setUserAnimating((v) => !v)}
               className={cn(
                 "relative inline-flex h-7 w-12 items-center rounded-full transition-colors focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none",
                 animating ? "bg-brand" : "bg-muted",

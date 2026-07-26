@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useState, useSyncExternalStore } from "react";
 
 import { Button } from "@/components/ui/button";
 
@@ -14,19 +14,23 @@ const STEPS = [
   "Manage everything on Dashboard — search, filter, and update application status.",
 ] as const;
 
-export function FirstRunGuideOverlay() {
-  const [show, setShow] = useState(false);
-  const [step, setStep] = useState(0);
+function subscribe() {
+  return () => {};
+}
 
-  useEffect(() => {
-    try {
-      if (localStorage.getItem(ONBOARDING_KEY) !== "1") {
-        setShow(true);
-      }
-    } catch {
-      setShow(false);
-    }
-  }, []);
+function getNeedsGuide(): boolean {
+  try {
+    return localStorage.getItem(ONBOARDING_KEY) !== "1";
+  } catch {
+    return false;
+  }
+}
+
+export function FirstRunGuideOverlay() {
+  const needsGuide = useSyncExternalStore(subscribe, getNeedsGuide, () => false);
+  const [dismissed, setDismissed] = useState(false);
+  const [step, setStep] = useState(0);
+  const show = needsGuide && !dismissed;
 
   if (!show) return null;
 
@@ -38,7 +42,7 @@ export function FirstRunGuideOverlay() {
     } catch {
       // ponytail: localStorage blocked — overlay may reappear next visit
     }
-    setShow(false);
+    setDismissed(true);
   }
 
   function handleNext() {

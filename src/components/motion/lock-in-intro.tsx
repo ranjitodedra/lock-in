@@ -1,25 +1,23 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 
 const SESSION_KEY = "lock-in-intro-v1";
 
 const WORDS = ["LOCK", "IN"] as const;
 
-function shouldShowIntro(): boolean {
-  if (typeof window === "undefined") return false;
+function subscribe() {
+  return () => {};
+}
+
+function getShouldShowIntro(): boolean {
   try {
     if (sessionStorage.getItem(SESSION_KEY)) return false;
   } catch {
     return false;
   }
   if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
-    try {
-      sessionStorage.setItem(SESSION_KEY, "1");
-    } catch {
-      // ponytail: sessionStorage may be unavailable in private mode edge cases
-    }
     return false;
   }
   return true;
@@ -40,9 +38,14 @@ const letterVariants = {
 };
 
 export function LockInIntro() {
-  // ponytail: start hidden so SSR/client first paint match; shouldShowIntro() needs window
-  const [show, setShow] = useState(false);
-  const [mounted, setMounted] = useState(false);
+  const preferShow = useSyncExternalStore(
+    subscribe,
+    getShouldShowIntro,
+    () => false,
+  );
+  const [dismissed, setDismissed] = useState(false);
+  const [exitDone, setExitDone] = useState(false);
+  const show = preferShow && !dismissed;
 
   const dismiss = useCallback(() => {
     try {
@@ -50,13 +53,7 @@ export function LockInIntro() {
     } catch {
       // ponytail: sessionStorage may be unavailable in private mode edge cases
     }
-    setShow(false);
-  }, []);
-
-  useEffect(() => {
-    if (!shouldShowIntro()) return;
-    setMounted(true);
-    setShow(true);
+    setDismissed(true);
   }, []);
 
   useEffect(() => {
@@ -77,10 +74,10 @@ export function LockInIntro() {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [show, dismiss]);
 
-  if (!mounted) return null;
+  if (!preferShow || exitDone) return null;
 
   return (
-    <AnimatePresence onExitComplete={() => setMounted(false)}>
+    <AnimatePresence onExitComplete={() => setExitDone(true)}>
       {show ? (
         <motion.div
           key="lock-in-intro"
