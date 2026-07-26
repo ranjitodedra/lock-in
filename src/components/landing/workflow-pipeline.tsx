@@ -36,34 +36,37 @@ function beamPath(
 ): string {
   const dx = p2.x - p1.x;
   const dy = p2.y - p1.y;
-  let cx: number;
-  let cy: number;
+  // Cubic with shared peak Y → round U instead of sharp quadratic tip.
   if (Math.abs(dx) > Math.abs(dy)) {
-    cx = (p1.x + p2.x) / 2;
-    cy = (p1.y + p2.y) / 2 + (curveDown ? curvature : -curvature);
-  } else {
-    cx = (p1.x + p2.x) / 2 + curvature;
-    cy = (p1.y + p2.y) / 2;
+    const peakY =
+      (p1.y + p2.y) / 2 + (curveDown ? curvature : -curvature);
+    const c1x = p1.x + dx * 0.35;
+    const c2x = p2.x - dx * 0.35;
+    return `M ${p1.x} ${p1.y} C ${c1x} ${peakY}, ${c2x} ${peakY}, ${p2.x} ${p2.y}`;
   }
-  return `M ${p1.x} ${p1.y} Q ${cx} ${cy} ${p2.x} ${p2.y}`;
+  const peakX = (p1.x + p2.x) / 2 + curvature;
+  const c1y = p1.y + dy * 0.35;
+  const c2y = p2.y - dy * 0.35;
+  return `M ${p1.x} ${p1.y} C ${peakX} ${c1y}, ${peakX} ${c2y}, ${p2.x} ${p2.y}`;
 }
 
 export function WorkflowPipeline() {
   const reducedMotion = useReducedMotion();
   const cardRef = useRef<HTMLDivElement>(null);
-  const nodeRefs = useRef<(HTMLDivElement | null)[]>([]);
+  const iconRefs = useRef<(HTMLDivElement | null)[]>([]);
   const [paths, setPaths] = useState({ track1: "", flow1: "", track2: "", flow2: "" });
   const [animating, setAnimating] = useState(!reducedMotion);
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
 
   const drawBeams = useCallback(() => {
     const card = cardRef.current;
-    const n1 = nodeRefs.current[0];
-    const n2 = nodeRefs.current[1];
-    const n3 = nodeRefs.current[2];
+    const n1 = iconRefs.current[0];
+    const n2 = iconRefs.current[1];
+    const n3 = iconRefs.current[2];
     if (!card || !n1 || !n2 || !n3) return;
 
     const cRect = card.getBoundingClientRect();
+    // Anchor to icon circles only — matches Paper (not the title block).
     const center = (el: HTMLElement) => {
       const rect = el.getBoundingClientRect();
       return {
@@ -75,7 +78,9 @@ export function WorkflowPipeline() {
     const p1 = center(n1);
     const p2 = center(n2);
     const p3 = center(n3);
-    const curvature = 60;
+    const horizontal = Math.abs(p2.x - p1.x) > Math.abs(p2.y - p1.y);
+    // Paper desktop: Q peaks ~60px off the icon midline.
+    const curvature = horizontal ? 60 : 48;
 
     setPaths({
       track1: beamPath(p1, p2, curvature),
@@ -92,6 +97,9 @@ export function WorkflowPipeline() {
 
     const ro = new ResizeObserver(drawBeams);
     ro.observe(card);
+    for (const icon of iconRefs.current) {
+      if (icon) ro.observe(icon);
+    }
     window.addEventListener("resize", drawBeams);
     return () => {
       ro.disconnect();
@@ -114,15 +122,6 @@ export function WorkflowPipeline() {
 
   return (
     <FadeInView className="relative mt-16 w-full">
-      <div
-        className="pointer-events-none fixed top-0 left-0 size-[500px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-brand-muted blur-[100px]"
-        aria-hidden
-      />
-      <div
-        className="pointer-events-none fixed right-0 bottom-0 size-[500px] translate-x-1/2 translate-y-1/2 rounded-full bg-blue-500/10 blur-[100px]"
-        aria-hidden
-      />
-
       <div className="relative z-10">
         <h2 className="mb-12 text-center text-3xl font-bold tracking-tight md:text-4xl">
           How it works
@@ -131,7 +130,8 @@ export function WorkflowPipeline() {
         <div
           ref={cardRef}
           className={cn(
-            "relative overflow-hidden rounded-3xl border border-border bg-card p-10 shadow-[0_0_40px_-12px_rgba(0,0,0,0.12)] md:p-20",
+            // overflow-visible so curved beams aren't clipped (Paper peaks above icon row)
+            "relative overflow-visible rounded-3xl border border-border bg-card p-10 shadow-[0_0_40px_-12px_rgba(0,0,0,0.12)] md:p-20",
             !animating && "workflow-pipeline-paused",
           )}
         >
@@ -160,7 +160,7 @@ export function WorkflowPipeline() {
           </div>
 
           <svg
-            className="pointer-events-none absolute inset-0 z-0 size-full"
+            className="pointer-events-none absolute inset-0 z-0 size-full overflow-visible"
             aria-hidden
           >
             <path
@@ -199,9 +199,6 @@ export function WorkflowPipeline() {
             {NODES.map((node, index) => (
               <div
                 key={node.title}
-                ref={(el) => {
-                  nodeRefs.current[index] = el;
-                }}
                 className={cn(
                   "group flex cursor-default flex-col items-center text-center transition-opacity duration-300",
                   hoveredIndex !== null &&
@@ -211,7 +208,12 @@ export function WorkflowPipeline() {
                 onMouseEnter={() => setHoveredIndex(index)}
                 onMouseLeave={() => setHoveredIndex(null)}
               >
-                <div className="relative flex size-20 items-center justify-center rounded-full border border-border bg-card shadow-[0_0_20px_-12px_rgba(0,0,0,0.3)] transition-all duration-300 group-hover:scale-110 group-hover:ring-4 group-hover:ring-brand/15">
+                <div
+                  ref={(el) => {
+                    iconRefs.current[index] = el;
+                  }}
+                  className="relative z-10 flex size-20 items-center justify-center rounded-full border border-border bg-card shadow-[0_0_20px_-12px_rgba(0,0,0,0.3)] transition-all duration-300 group-hover:scale-110 group-hover:ring-4 group-hover:ring-brand/15"
+                >
                   {"imageSrc" in node ? (
                     <Image
                       src={node.imageSrc}

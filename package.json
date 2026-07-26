@@ -10,6 +10,7 @@
     "typecheck": "tsc --noEmit",
     "check:follow-up": "npx tsx src/lib/applications/follow-up.ts",
     "check:queries-cursor": "npx tsx src/lib/applications/queries-cursor-check.ts",
+    "check:job-status": "npx tsx src/lib/extraction/job-status-check.ts",
     "setup:google-oauth": "node scripts/setup-google-oauth.mjs",
     "verify:google-oauth": "node scripts/verify-google-oauth.mjs",
     "sync:public": "node scripts/sync-public.mjs"
@@ -22,6 +23,7 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "framer-motion": "^12.42.2",
+    "inngest": "^4.13.0",
     "lucide-react": "^1.23.0",
     "next": "16.2.10",
     "next-themes": "^0.4.6",

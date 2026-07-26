@@ -1,24 +1,20 @@
 import { NextResponse } from "next/server";
 
 import { getAuthUser } from "@/lib/auth/session";
-import { sendCodexMessage } from "@/lib/codex/client";
-import { ensureFreshTokens } from "@/lib/codex/auth";
-import {
-  getCodexTokens,
-  saveCodexTokens,
-} from "@/lib/codex/session";
+import { getCodexTokens } from "@/lib/codex/session";
 import { MAX_RAW_DESCRIPTION } from "@/lib/applications/form";
 import { reportError } from "@/lib/monitoring";
 import {
   BURST_EXTRACTIONS_PER_MINUTE,
   BURST_WINDOW_MS,
 } from "@/lib/extraction/constants";
-import {
-  EXTRACTION_SYSTEM_PROMPT,
-  extractionUserMessage,
-} from "@/lib/extraction/prompt";
-import { parseExtractionResponse } from "@/lib/extraction/schema";
 import { tryRecordExtraction } from "@/lib/extraction/usage";
+import {
+  EXTRACTION_REQUESTED_EVENT,
+  inngest,
+} from "@/lib/inngest/client";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { createClient } from "@/lib/supabase/server";
 
 export async function POST(request: Request) {
   const user = await getAuthUser();
@@ -51,7 +47,7 @@ export async function POST(request: Request) {
     );
   }
 
-  let tokens = await getCodexTokens(user.id);
+  const tokens = await getCodexTokens(user.id);
   if (!tokens) {
     return NextResponse.json(
       {
@@ -83,79 +79,60 @@ export async function POST(request: Request) {
     );
   }
 
-  const originalAccessToken = tokens.access_token;
-  try {
-    const fresh = await ensureFreshTokens(tokens);
-    if (!fresh) {
-      return NextResponse.json(
-        {
-          error: "not_connected",
-          message: "ChatGPT session expired. Reconnect in Settings.",
-        },
-        { status: 403 },
-      );
-    }
-    tokens = fresh;
-    if (fresh.access_token !== originalAccessToken) {
-      await saveCodexTokens(user.id, fresh);
-    }
-  } catch (err) {
-    reportError(err, { route: "api/extract", step: "codex_refresh" });
+  const supabase = await createClient();
+  const { data: job, error: insertError } = await supabase
+    .from("extraction_jobs")
+    .insert({
+      user_id: user.id,
+      status: "pending",
+      raw_description: rawDescription,
+    })
+    .select("id")
+    .single();
+
+  if (insertError || !job) {
+    reportError(insertError ?? new Error("missing job row"), {
+      route: "api/extract",
+      step: "insert_job",
+    });
     return NextResponse.json(
       {
-        error: "not_connected",
-        message: "ChatGPT session expired. Reconnect in Settings.",
+        error: "extraction_failed",
+        message: "Could not start extraction. Try again.",
       },
-      { status: 403 },
+      { status: 500 },
     );
   }
 
-  let content: string;
   try {
-    content = await sendCodexMessage({
-      tokens,
-      instructions: EXTRACTION_SYSTEM_PROMPT,
-      userText: extractionUserMessage(rawDescription),
+    await inngest.send({
+      name: EXTRACTION_REQUESTED_EVENT,
+      data: { jobId: job.id, userId: user.id },
     });
   } catch (err) {
-    reportError(err, { route: "api/extract", step: "codex_completion" });
-    const message =
-      err instanceof Error && /subscription|plus|plan|401|403/i.test(err.message)
-        ? "Your ChatGPT subscription may not support this feature."
-        : "Extraction failed. Try again or fill in fields manually.";
-    const code =
-      err instanceof Error && /subscription|plus|plan|401|403/i.test(err.message)
-        ? "subscription_error"
-        : "extraction_failed";
-    return NextResponse.json(
-      { error: code, message },
-      { status: code === "subscription_error" ? 402 : 500 },
-    );
-  }
-
-  if (!content) {
-    return NextResponse.json(
-      {
-        error: "extraction_failed",
-        message: "No extraction result returned. Try again.",
-      },
-      { status: 500 },
-    );
-  }
-
-  const parsed = parseExtractionResponse(content);
-  if (!parsed.ok) {
-    if ("notJobPosting" in parsed && parsed.notJobPosting) {
-      return NextResponse.json(parsed.notJobPosting, { status: 422 });
+    reportError(err, { route: "api/extract", step: "enqueue" });
+    try {
+      await createAdminClient()
+        .from("extraction_jobs")
+        .update({
+          status: "failed",
+          error_code: "extraction_failed",
+          error_message: "Could not queue extraction. Try again.",
+          completed_at: new Date().toISOString(),
+        })
+        .eq("id", job.id);
+    } catch {
+      // Best-effort; job may stay pending until retention cron.
     }
+
     return NextResponse.json(
       {
         error: "extraction_failed",
-        message: "Could not parse extraction result. Try again.",
+        message: "Could not queue extraction. Try again.",
       },
       { status: 500 },
     );
   }
 
-  return NextResponse.json({ data: parsed.data });
+  return NextResponse.json({ jobId: job.id }, { status: 202 });
 }

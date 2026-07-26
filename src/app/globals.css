@@ -147,12 +147,25 @@
   }
 }
 
+/* Match Paper: dash 10/30, soft brand glow along the path */
 .workflow-pipeline-beam {
   stroke-dasharray: 10 30;
-  animation: workflow-beam-move 1.2s linear infinite;
-  filter: drop-shadow(0 0 6px color-mix(in oklch, var(--brand) 45%, transparent));
+  animation: workflow-beam-move 1.4s linear infinite;
+  filter: drop-shadow(0 0 4px color-mix(in oklch, var(--brand) 55%, transparent))
+    drop-shadow(0 0 12px color-mix(in oklch, var(--brand) 25%, transparent));
 }
 
 .workflow-pipeline-paused .workflow-pipeline-beam {
   animation-play-state: paused;
+  /* Solid-enough paused look like Paper’s static dashed beams */
+  opacity: 0.85;
+}
+
+/* Paper “Brand glow” — radial blue shine behind landing hero */
+.landing-brand-glow {
+  background-image: radial-gradient(
+    circle farthest-corner at 50% 40% in oklab,
+    oklab(52% -0.023 -0.219 / 12%) 0%,
+    transparent 60%
+  );
 }

@@ -21,7 +21,7 @@ Locked MVP boundaries and architecture decisions for the AI Job Application Trac
 
 | Question | Decision |
 |---|---|
-| Where extraction runs | **Next.js Route Handler** (`POST /api/extract`) using user's token via relay |
+| Where extraction runs | **Inngest worker** triggered by `POST /api/extract` (enqueue `202` + poll) |
 | ChatGPT not connected | **Allow manual entry**; show connect prompt for AI extract button only |
 | Re-extract | **Yes** — optional "Re-extract" on new/edit form if description changes |
 | Max description length | **32,000 characters** (~8k tokens); truncate with user warning above limit |

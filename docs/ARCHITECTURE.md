@@ -15,6 +15,8 @@ Browser
   └── Server Actions ──► Supabase Postgres (RLS)
 
 Middleware ──► Supabase Auth (session refresh + route protection)
+POST /api/extract ──► extraction_jobs + Inngest event (202)
+Inngest worker ──► Codex SSE ──► update extraction_jobs
 Vercel Cron ──► /api/cron/cleanup-extraction-usage
 ```
 
@@ -43,11 +45,13 @@ Protected paths are enforced in [`src/lib/auth/routes.ts`](../src/lib/auth/route
 
 | Method | Path | Purpose |
 |--------|------|---------|
-| POST | `/api/extract` | AI field extraction from job description |
+| POST | `/api/extract` | Enqueue AI extraction (`202 { jobId }`) |
+| GET | `/api/extract/[jobId]` | Poll extraction job status |
+| GET/POST/PUT | `/api/inngest` | Inngest serve endpoint (workers) |
 | POST | `/api/codex/auth/start` | Start Codex device-code OAuth |
 | GET | `/api/codex/auth/poll` | Poll for OAuth completion |
 | POST | `/api/codex/auth/logout` | Disconnect ChatGPT |
-| GET | `/api/cron/cleanup-extraction-usage` | Delete stale rate-limit rows (cron) |
+| GET | `/api/cron/cleanup-extraction-usage` | Delete stale rate-limit + job rows (cron) |
 | GET | `/auth/callback` | Supabase OAuth callback |
 | POST | `/auth/signout` | Sign out |
 
@@ -69,7 +73,8 @@ src/
 │   ├── applications/       # Queries, actions, follow-up logic
 │   ├── auth/               # Session, admin check, route guards
 │   ├── codex/              # OAuth client, token session, SSE
-│   ├── extraction/         # Prompt, schema, rate limiting
+│   ├── extraction/         # Prompt, schema, rate limiting, job poll helpers
+│   ├── inngest/            # Inngest client + extraction worker
 │   └── supabase/           # Client, server, admin, middleware
 ├── env.ts                  # Zod-validated environment (fail-closed)
 └── middleware.ts           # Auth gate entry point
@@ -100,11 +105,19 @@ Stores Codex OAuth tokens per user (`access_token`, `refresh_token`, expiry).
 
 ### `extraction_usage`
 
-Append-only rate-limit audit log. One row per extraction attempt.
+Append-only rate-limit audit log. One row per extraction enqueue.
 
 - **RLS:** `auth.uid() = user_id`
 - **RPC:** `check_and_record_extraction(user_id, burst_limit, window_ms)` — atomic check-and-insert with advisory lock
 - **Retention:** Vercel Cron deletes rows older than 24 hours
+
+### `extraction_jobs`
+
+Async extraction queue. Stores `raw_description`, `status` (`pending` | `processing` | `completed` | `failed`), `result` jsonb, and error fields.
+
+- **RLS:** users may `INSERT`/`SELECT` own rows; workers update via service role
+- **Worker:** Inngest function `process-extraction-job` calls Codex and writes terminal status
+- **Retention:** same cron deletes rows older than 24 hours
 
 ### Removed tables
 
@@ -131,10 +144,10 @@ Admin access is gated by the `ADMIN_EMAIL` environment variable, checked server-
 2. `POST /api/codex/auth/start` initiates device-code flow; returns a user code and verification URL.
 3. Client polls `GET /api/codex/auth/poll` until the user completes authorization.
 4. Tokens are saved to `codex_connections` via [`src/lib/codex/session.ts`](../src/lib/codex/session.ts).
-5. On extraction, `ensureFreshTokens()` refreshes expired tokens silently.
+5. On extraction, an Inngest worker calls `ensureFreshTokens()` to refresh expired tokens silently.
 6. `POST /api/codex/auth/logout` clears the connection.
 
-Codex SSE calls go through [`src/lib/codex/client.ts`](../src/lib/codex/client.ts) with a 30-second timeout.
+Codex SSE calls go through [`src/lib/codex/client.ts`](../src/lib/codex/client.ts) with a 30-second timeout (invoked from the Inngest worker, not the HTTP enqueue handler).
 
 ---
 
@@ -168,7 +181,7 @@ Detail pages use `getApplication(id)` with `select("*")` for the full row.
 
 [`vercel.json`](../vercel.json) schedules `GET /api/cron/cleanup-extraction-usage` at 03:00 UTC daily.
 
-The route validates `Authorization: Bearer <CRON_SECRET>` and deletes `extraction_usage` rows older than 24 hours using the Supabase service-role client.
+The route validates `Authorization: Bearer <CRON_SECRET>` and deletes `extraction_usage` and `extraction_jobs` rows older than 24 hours using the Supabase service-role client.
 
 ---
 
@@ -187,4 +200,8 @@ Missing required vars cause build/startup to fail immediately.
 
 For a detailed weakness analysis and phased remediation plan targeting 100k DAU, see [ARCHITECTURE_REVIEW_100K_DAU.md](ARCHITECTURE_REVIEW_100K_DAU.md).
 
-Phase 1 fixes (pagination, env validation, atomic rate limiting, Codex timeout, retention cron) are implemented. Phase 2/3 items (async queue, token encryption, server-side search, pooler, Sentry) remain on the roadmap.
+For current capacity ceilings, a free-tier-first hyperscale target architecture, and the path toward ~1M concurrent users, see [blog/scaling-to-one-million-concurrent-users.md](blog/scaling-to-one-million-concurrent-users.md).
+
+For the company-grade viral growth RFC (SLOs, load-shed, cells, resume narrative), see [SCALE_UP_PLAN.md](SCALE_UP_PLAN.md).
+
+Phase 1 fixes (pagination, env validation, atomic rate limiting, Codex timeout, retention cron) and the async extraction job queue (Inngest + `extraction_jobs` + client poll) are implemented. Remaining Phase 2/3 items (token encryption, server-side search, pooler, Sentry) stay on the roadmap.

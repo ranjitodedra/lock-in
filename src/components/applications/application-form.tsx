@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
 
@@ -19,11 +19,11 @@ import {
   resolveAppliedFields,
 } from "@/lib/applications/follow-up";
 import { extractionToFormValues } from "@/lib/extraction/map";
+import { pollExtractionJob } from "@/lib/extraction/poll";
 import type { ApplicationRow } from "@/types/application";
 import {
   APPLICATION_STATUSES,
   type ApplicationStatus,
-  type JobExtraction,
   type WorkMode,
 } from "@/types/application";
 import { Button } from "@/components/ui/button";
@@ -130,6 +130,13 @@ export function ApplicationForm({
   const [followUpWasSuggested, setFollowUpWasSuggested] = useState(false);
   const [isPending, startTransition] = useTransition();
   const mountedAtRef = useRef(Date.now());
+  const extractAbortRef = useRef<AbortController | null>(null);
+
+  useEffect(() => {
+    return () => {
+      extractAbortRef.current?.abort();
+    };
+  }, []);
 
   const descriptionTrimmed = values.raw_description.trim();
   const descriptionTooLong = values.raw_description.length > MAX_RAW_DESCRIPTION;
@@ -144,23 +151,23 @@ export function ApplicationForm({
   async function handleExtract() {
     if (!canExtract) return;
 
+    extractAbortRef.current?.abort();
+    const abort = new AbortController();
+    extractAbortRef.current = abort;
+
     setExtracting(true);
     try {
       const res = await fetch("/api/extract", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ rawDescription: values.raw_description }),
+        signal: abort.signal,
       });
 
       const data = (await res.json().catch(() => null)) as
-        | { data: JobExtraction }
+        | { jobId: string }
         | { error: string; message?: string }
         | null;
-
-      if (res.status === 422 && data && "message" in data && data.message) {
-        toast.error(data.message);
-        return;
-      }
 
       if (!res.ok) {
         const err = data && "error" in data ? data : null;
@@ -170,14 +177,34 @@ export function ApplicationForm({
         return;
       }
 
-      if (data && "data" in data) {
-        setValues((prev) => extractionToFormValues(data.data, prev));
-        toast.success("Fields extracted. Review before saving.");
+      if (!data || !("jobId" in data) || !data.jobId) {
+        toast.error("Extraction failed. Try again or fill in fields manually.");
+        return;
       }
-    } catch {
+
+      const pollResult = await pollExtractionJob(data.jobId, abort.signal);
+      if (pollResult.kind === "completed") {
+        setValues((prev) => extractionToFormValues(pollResult.data, prev));
+        toast.success("Fields extracted. Review before saving.");
+        return;
+      }
+      if (pollResult.kind === "failed") {
+        toast.error(pollResult.message);
+        return;
+      }
+      toast.error("Extraction timed out. Try again.");
+    } catch (err) {
+      if (err instanceof DOMException && err.name === "AbortError") {
+        return;
+      }
       toast.error("Extraction failed. Try again or fill in fields manually.");
     } finally {
-      setExtracting(false);
+      if (extractAbortRef.current === abort) {
+        extractAbortRef.current = null;
+      }
+      if (!abort.signal.aborted) {
+        setExtracting(false);
+      }
     }
   }
 

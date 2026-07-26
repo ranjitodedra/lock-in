@@ -40,9 +40,9 @@ const letterVariants = {
 };
 
 export function LockInIntro() {
-  const initialShow = shouldShowIntro();
-  const [show, setShow] = useState(initialShow);
-  const [mounted, setMounted] = useState(initialShow);
+  // ponytail: start hidden so SSR/client first paint match; shouldShowIntro() needs window
+  const [show, setShow] = useState(false);
+  const [mounted, setMounted] = useState(false);
 
   const dismiss = useCallback(() => {
     try {
@@ -51,6 +51,12 @@ export function LockInIntro() {
       // ponytail: sessionStorage may be unavailable in private mode edge cases
     }
     setShow(false);
+  }, []);
+
+  useEffect(() => {
+    if (!shouldShowIntro()) return;
+    setMounted(true);
+    setShow(true);
   }, []);
 
   useEffect(() => {

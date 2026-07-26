@@ -28,9 +28,10 @@ Manual entry always works without ChatGPT connected.
 | Framework | **Next.js 16** (App Router) + React 19 + TypeScript | Server Components, Server Actions, and Route Handlers in one deployable unit |
 | Styling | **Tailwind CSS 4** + **shadcn/ui** | Utility-first CSS with accessible, composable components |
 | Database & auth | **Supabase** (Postgres + Auth + RLS) | Managed Postgres with built-in auth and row-level security — no custom auth server |
-| AI extraction | **Codex device-code OAuth** | Users bring their own ChatGPT subscription; no app-owner OpenAI billing |
+| AI extraction | **Codex device-code OAuth** + **Inngest** jobs | Users bring their own ChatGPT subscription; long Codex calls run in background workers |
 | Validation | **Zod v4** | Runtime validation for env vars and AI extraction output |
 | Deployment | **Vercel** | Serverless functions, cron jobs, and edge middleware |
+| Background jobs | **Inngest** | Decouples 10–30s Codex calls from HTTP request lifecycle |
 | CI | **GitHub Actions** | Lint, typecheck, and build on every push |
 
 ---
@@ -49,8 +50,13 @@ flowchart TB
     RSC[ServerComponents]
     SA[ServerActions]
     ExtractAPI[ExtractAPI]
+    InngestServe[InngestServe]
     CodexAPI[CodexAuthAPI]
     CronAPI[CronCleanupAPI]
+  end
+
+  subgraph jobs [Inngest]
+    ExtractWorker[ExtractWorker]
   end
 
   subgraph supabase [Supabase]
@@ -71,14 +77,17 @@ flowchart TB
   ClientUI --> SA
   SA --> PG
   ExtractAPI --> PG
-  ExtractAPI --> SSE
+  ExtractAPI --> ExtractWorker
+  InngestServe --> ExtractWorker
+  ExtractWorker --> PG
+  ExtractWorker --> SSE
   CodexAPI --> PG
   CronAPI --> PG
 ```
 
 See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for component-level detail.
 
-Route labels: `POST /api/extract`, `/api/codex/auth/*`, `GET /api/cron/cleanup-extraction-usage`.
+Route labels: `POST /api/extract` (enqueue), `GET /api/extract/[jobId]` (poll), `/api/inngest`, `/api/codex/auth/*`, `GET /api/cron/cleanup-extraction-usage`.
 
 ---
 
@@ -88,12 +97,12 @@ Route labels: `POST /api/extract`, `/api/codex/auth/*`, `GET /api/cron/cleanup-e
 2. User connects ChatGPT in **Settings** via Codex device-code OAuth; tokens are stored in Postgres (`codex_connections`) with RLS.
 3. On **New Application**, user pastes a job description and clicks **Extract fields**.
 4. Client sends `POST /api/extract` with the raw description.
-5. Server validates auth, checks burst rate limit (20/min via Postgres RPC + advisory lock), and loads fresh Codex tokens.
-6. Server calls OpenAI Codex SSE API with a structured system prompt; response is parsed through Zod.
-7. Extracted fields pre-fill the form; user reviews and saves via a Server Action.
-8. Server Action inserts/updates the row in `applications`; Supabase RLS ensures `auth.uid() = user_id`.
+5. Server validates auth, checks Codex is connected, applies burst rate limit (20/min via Postgres RPC + advisory lock), inserts an `extraction_jobs` row (`pending`), enqueues an Inngest event, and returns **`202 { jobId }`**.
+6. An Inngest worker refreshes Codex tokens, calls the OpenAI Codex SSE API, parses the response with Zod, and updates the job to `completed` or `failed`.
+7. Client polls `GET /api/extract/[jobId]` every ~2s until the job is terminal; extracted fields pre-fill the form.
+8. User reviews and saves via a Server Action; Supabase RLS ensures `auth.uid() = user_id`.
 
-A Vercel Cron job deletes `extraction_usage` rows older than 24 hours nightly.
+A Vercel Cron job deletes `extraction_usage` and `extraction_jobs` rows older than 24 hours nightly.
 
 ---
 
@@ -103,7 +112,7 @@ A Vercel Cron job deletes `extraction_usage` rows older than 24 hours nightly.
 |----------|-----------|
 | **BYOK ChatGPT via Codex OAuth** | Zero app-owner API cost, but relies on an unofficial OAuth flow that may break if OpenAI changes access |
 | **Supabase RLS over custom auth** | Faster to ship and audit; database is the authorization boundary |
-| **Synchronous extraction in Route Handler** | Simple request/response UX; holds a serverless function open 10–30s per extraction (see capacity below) |
+| **Async extraction via Inngest + job poll** | HTTP handlers return in milliseconds; needs Inngest (or Dev Server locally) and a short poll loop in the form |
 | **Keyset pagination + column projection** | Dashboard loads 50 slim rows per page instead of full history with 32KB blobs |
 | **Fail-closed env validation** | Build fails on misconfiguration instead of serving requests with auth disabled |
 | **Personal tracker (no collaboration)** | Simpler data model; multi-user boards deferred to v2 |
@@ -164,6 +173,12 @@ Apply migrations from [`supabase/migrations/`](supabase/migrations/) to your Sup
 npm run dev
 ```
 
+For AI extraction, also run the Inngest Dev Server (separate terminal):
+
+```bash
+npx inngest-cli@latest dev -u http://localhost:3000/api/inngest
+```
+
 Open [http://localhost:3000](http://localhost:3000).
 
 ---
@@ -174,8 +189,9 @@ Open [http://localhost:3000](http://localhost:3000).
 
 1. Import the repository into [Vercel](https://vercel.com).
 2. Set environment variables from `.env.example` in the Vercel project settings.
-3. Required in production: `SUPABASE_SERVICE_ROLE_KEY`, `CRON_SECRET`, `ADMIN_EMAIL`.
-4. Deploy — `vercel.json` configures a daily cron at 03:00 UTC for extraction usage cleanup.
+3. Required in production: `SUPABASE_SERVICE_ROLE_KEY`, `CRON_SECRET`, `ADMIN_EMAIL`, `INNGEST_EVENT_KEY`, `INNGEST_SIGNING_KEY`.
+4. Sync the app with [Inngest](https://www.inngest.com/) (Cloud → your `/api/inngest` URL).
+5. Deploy — `vercel.json` configures a daily cron at 03:00 UTC for extraction usage/job cleanup.
 
 ### Supabase
 
@@ -191,17 +207,17 @@ No load testing has been performed. All figures below are **Estimated** from cod
 
 | Metric | Estimate | Basis |
 |--------|----------|-------|
-| Comfortable DAU | ~5k–10k | Keyset pagination, atomic rate limiting, and Codex timeout address prior unbounded-fetch and race-condition bottlenecks |
-| Concurrent extractions before queueing | ~50–500 | Sync SSE holds Vercel functions 10–30s; no async job queue |
-| Per-user extraction burst | 20/min | `BURST_EXTRACTIONS_PER_MINUTE` in `src/lib/extraction/constants.ts` |
+| Comfortable DAU | ~5k–10k | Keyset pagination, atomic rate limiting, async extract, and Codex timeout address prior unbounded-fetch and race-condition bottlenecks |
+| Concurrent extract enqueues | Bound by short Vercel handlers + Postgres writes | `POST /api/extract` returns `202` without awaiting Codex |
+| Concurrent Codex jobs | Bound by Inngest worker concurrency + Codex | Worker holds the 10–30s SSE call; scale via Inngest, not web function slots |
+| Per-user extraction burst | 20/min | `BURST_EXTRACTIONS_PER_MINUTE` in `src/lib/extraction/constants.ts` (counted at enqueue) |
 | Postgres direct connections | ~60–200 | Supabase tier limits; no connection pooler configured |
-| Primary bottlenecks | Sync extraction, middleware auth on every request, plaintext Codex tokens in DB, no connection pooler | See [docs/ARCHITECTURE_REVIEW_100K_DAU.md](docs/ARCHITECTURE_REVIEW_100K_DAU.md) |
+| Primary bottlenecks | Inngest/Codex throughput, middleware auth on every request, plaintext Codex tokens in DB, no connection pooler | See [docs/ARCHITECTURE_REVIEW_100K_DAU.md](docs/ARCHITECTURE_REVIEW_100K_DAU.md) |
 
 ---
 
 ## Roadmap
 
-- Async extraction job queue (decouple long-running Codex calls from HTTP request lifecycle)
 - Token encryption at rest for `codex_connections`
 - Server-side full-text search (GIN index exists but is not queried yet)
 - Connection pooler configuration for serverless scale
@@ -220,6 +236,8 @@ No load testing has been performed. All figures below are **Estimated** from cod
 | [docs/PROJECT_DECISIONS.md](docs/PROJECT_DECISIONS.md) | Locked MVP boundaries |
 | [docs/ENGINEERING_HIGHLIGHTS.md](docs/ENGINEERING_HIGHLIGHTS.md) | Production hardening wins |
 | [docs/ARCHITECTURE_REVIEW_100K_DAU.md](docs/ARCHITECTURE_REVIEW_100K_DAU.md) | Scale review and remediation roadmap |
+| [docs/SCALE_UP_PLAN.md](docs/SCALE_UP_PLAN.md) | Company-grade viral scale-up RFC (SLOs, load-shed, cells) |
+| [docs/blog/scaling-to-one-million-concurrent-users.md](docs/blog/scaling-to-one-million-concurrent-users.md) | Capacity ceilings and free-tier hyperscale design |
 | [docs/legal/](docs/legal/) | Privacy policy and terms of service |
 
 ---
