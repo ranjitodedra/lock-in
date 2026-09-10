@@ -8,15 +8,19 @@
     "start": "next start",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
-    "check:follow-up": "npx tsx src/lib/applications/follow-up.ts",
-    "check:queries-cursor": "npx tsx src/lib/applications/queries-cursor-check.ts",
-    "check:job-status": "npx tsx src/lib/extraction/job-status-check.ts",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:e2e": "playwright test",
+    "check:follow-up": "vitest run src/lib/applications/follow-up.test.ts",
+    "check:queries-cursor": "vitest run src/lib/applications/queries-cursor.test.ts",
+    "check:job-status": "vitest run src/lib/extraction/job-status.test.ts",
     "setup:google-oauth": "node scripts/setup-google-oauth.mjs",
     "verify:google-oauth": "node scripts/verify-google-oauth.mjs",
     "sync:public": "node scripts/sync-public.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.6.0",
+    "@reduxjs/toolkit": "^2.12.0",
     "@supabase/ssr": "^0.12.0",
     "@supabase/supabase-js": "^2.110.0",
     "@vercel/analytics": "^2.0.1",
@@ -29,6 +33,7 @@
     "next-themes": "^0.4.6",
     "react": "19.2.4",
     "react-dom": "19.2.4",
+    "react-redux": "^9.3.0",
     "shadcn": "^4.13.0",
     "sonner": "^2.0.7",
     "tailwind-merge": "^3.6.0",
@@ -36,14 +41,22 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.13.0",
+    "@playwright/test": "^1.63.0",
     "@tailwindcss/postcss": "^4",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.3",
+    "@testing-library/user-event": "^14.6.7",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.2.10",
+    "jsdom": "^30.0.1",
     "keytar": "^7.9.0",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vitest": "^3.2.4",
+    "vitest-axe": "^0.1.0"
   }
 }

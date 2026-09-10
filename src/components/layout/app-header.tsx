@@ -56,6 +56,7 @@ export function AppHeader({
               size="icon"
               className="md:hidden"
               aria-label="Open menu"
+              aria-expanded={mobileOpen}
               onClick={() => setMobileOpen(true)}
             >
               <Menu className="size-4" />

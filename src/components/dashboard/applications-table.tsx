@@ -24,6 +24,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import type { PatchApplicationInput } from "@/lib/applications/actions";
+import type { SortDir, SortKey } from "@/lib/applications/dashboard-filters";
 import {
   EMPTY_VALUE,
   formatDateTime,
@@ -38,15 +39,7 @@ import {
   type ApplicationStatus,
 } from "@/types/application";
 
-export type SortKey =
-  | "company"
-  | "job_title"
-  | "status"
-  | "salary"
-  | "follow_up_date"
-  | "created_at";
-
-export type SortDir = "asc" | "desc";
+export type { SortDir, SortKey };
 
 const COLUMNS: { key: SortKey; label: string }[] = [
   { key: "company", label: "Company" },
@@ -200,8 +193,6 @@ export function ApplicationsTable({
             return (
               <MotionTableRow
                 key={app.id}
-                tabIndex={0}
-                role="button"
                 className="cursor-pointer hover:bg-muted/20"
                 initial={shouldAnimate ? "hidden" : false}
                 animate="visible"
@@ -211,15 +202,15 @@ export function ApplicationsTable({
                   delay: shouldAnimate ? index * 0.04 : 0,
                 }}
                 onClick={() => onSelect(app)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" || e.key === " ") {
-                    e.preventDefault();
-                    onSelect(app);
-                  }
-                }}
               >
                 <TableCell className="py-3 pl-5 pr-4 font-bold">
-                  {formatText(app.company)}
+                  <Link
+                    href={`/applications/${app.id}`}
+                    className="text-foreground underline-offset-4 hover:underline"
+                    onClick={stopRowClick}
+                  >
+                    {formatText(app.company)}
+                  </Link>
                 </TableCell>
                 <TableCell className="py-3">{formatText(app.job_title)}</TableCell>
                 <TableCell className="py-3" onClick={stopRowClick} onPointerDown={stopRowClick}>
@@ -232,6 +223,7 @@ export function ApplicationsTable({
                   >
                     <SelectTrigger
                       className="h-8 w-[130px] border-transparent bg-transparent shadow-none hover:bg-muted/50"
+                      aria-label={`Status for ${formatText(app.company)}`}
                       onClick={stopRowClick}
                       onPointerDown={stopRowClick}
                     >
@@ -254,6 +246,7 @@ export function ApplicationsTable({
                       type="date"
                       className="h-8 w-[140px]"
                       disabled={isPatching}
+                      aria-label={`Follow-up date for ${formatText(app.company)}`}
                       value={dateInputFromDate(app.follow_up_date)}
                       onClick={stopRowClick}
                       onPointerDown={stopRowClick}

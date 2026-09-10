@@ -35,13 +35,17 @@ See [README.md](../README.md) for Supabase Auth configuration and migration step
 | `start` | `next start` | Serve production build |
 | `lint` | `eslint` | Lint source |
 | `typecheck` | `tsc --noEmit` | Type check |
-| `check:follow-up` | `tsx follow-up.ts` | Self-check for follow-up date logic |
-| `check:queries-cursor` | `tsx queries-cursor-check.ts` | Self-check for cursor encode/decode |
+| `test` | `vitest run` | Unit and component tests |
+| `test:watch` | `vitest` | Vitest watch mode |
+| `test:e2e` | `playwright test` | Public-page accessibility smokes |
+| `check:follow-up` | `vitest run follow-up.test.ts` | Follow-up date logic tests |
+| `check:queries-cursor` | `vitest run queries-cursor.test.ts` | Cursor encode/decode tests |
+| `check:job-status` | `vitest run job-status.test.ts` | Extraction job-status mapping tests |
 | `setup:google-oauth` | `node scripts/setup-google-oauth.mjs` | Configure Google OAuth on Supabase |
 | `verify:google-oauth` | `node scripts/verify-google-oauth.mjs` | Verify Google redirect URI |
 | `sync:public` | `node scripts/sync-public.mjs` | Publish current private tree to public portfolio repo |
 
-There is no formal test framework (Jest/Vitest/Playwright). Verification is lint + typecheck + build + self-check scripts.
+Tests: Vitest (unit/component/a11y) and Playwright (landing + login axe smokes). See [A11Y.md](A11Y.md) for the WCAG 2.2 AA audit notes.
 
 ---
 
@@ -134,7 +138,9 @@ Also update [`src/types/application.ts`](../src/types/application.ts) if applica
 1. `npm ci`
 2. `npm run lint`
 3. `npm run typecheck`
-4. `npm run build` (with placeholder Supabase env vars)
+4. `npm test` (Vitest)
+5. `npm run build` (with placeholder Supabase env vars)
+6. Playwright Chromium a11y smokes for `/` and `/login`
 
 ---
 
@@ -185,6 +191,7 @@ They can be ignored when reviewing the application architecture.
 
 | Document | Purpose |
 |----------|---------|
+| [A11Y.md](A11Y.md) | WCAG 2.2 AA audit notes and exceptions |
 | [PROJECT_DECISIONS.md](PROJECT_DECISIONS.md) | Locked MVP boundaries |
 | [ENGINEERING_HIGHLIGHTS.md](ENGINEERING_HIGHLIGHTS.md) | Production hardening changelog |
 | [ARCHITECTURE_REVIEW_100K_DAU.md](ARCHITECTURE_REVIEW_100K_DAU.md) | Scale review |

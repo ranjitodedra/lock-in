@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, useTransition } from "react";
+import { useEffect, useRef, useTransition } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
 
@@ -14,10 +14,7 @@ import {
   MAX_RAW_DESCRIPTION,
   type ApplicationFormValues,
 } from "@/lib/applications/form";
-import {
-  FOLLOW_UP_CALENDAR_DAYS,
-  resolveAppliedFields,
-} from "@/lib/applications/follow-up";
+import { FOLLOW_UP_CALENDAR_DAYS } from "@/lib/applications/follow-up";
 import { extractionToFormValues } from "@/lib/extraction/map";
 import { pollExtractionJob } from "@/lib/extraction/poll";
 import type { ApplicationRow } from "@/types/application";
@@ -26,6 +23,16 @@ import {
   type ApplicationStatus,
   type WorkMode,
 } from "@/types/application";
+import { useAppDispatch, useAppSelector, useAppStore } from "@/store/hooks";
+import {
+  applyExtraction,
+  hydrateApplicationForm,
+  setConnected,
+  setError,
+  setExtracting,
+  setField,
+  statusChanged,
+} from "@/store/slices/application-form-slice";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -84,7 +91,7 @@ function ExtractableSection({
   children: React.ReactNode;
 }) {
   return (
-    <div className="relative space-y-6">
+    <div className="relative space-y-6" aria-busy={extracting}>
       {extracting ? <ExtractSkeletonOverlay /> : null}
       {children}
     </div>
@@ -122,12 +129,30 @@ export function ApplicationForm({
   onSaved,
   onPendingChange,
 }: ApplicationFormProps) {
-  const [values, setValues] = useState<ApplicationFormValues>(initialValues);
-  const [baselineDescription] = useState(initialValues.raw_description);
-  const [error, setError] = useState<string | null>(null);
-  const [extracting, setExtracting] = useState(false);
-  const [connected, setConnected] = useState(chatGptConnected);
-  const [followUpWasSuggested, setFollowUpWasSuggested] = useState(false);
+  const store = useAppStore();
+  const dispatch = useAppDispatch();
+  const hydratedRef = useRef<boolean | null>(null);
+  if (hydratedRef.current == null) {
+    hydratedRef.current = true;
+    store.dispatch(
+      hydrateApplicationForm({
+        values: initialValues,
+        connected: chatGptConnected,
+        initialAppliedAt,
+      }),
+    );
+  }
+
+  const values = useAppSelector((state) => state.applicationForm.values);
+  const extracting = useAppSelector((state) => state.applicationForm.extracting);
+  const error = useAppSelector((state) => state.applicationForm.error);
+  const connected = useAppSelector((state) => state.applicationForm.connected);
+  const followUpWasSuggested = useAppSelector(
+    (state) => state.applicationForm.followUpWasSuggested,
+  );
+  const baselineDescription = useAppSelector(
+    (state) => state.applicationForm.baselineDescription,
+  );
   const [isPending, startTransition] = useTransition();
   const mountedAtRef = useRef(0);
   const extractAbortRef = useRef<AbortController | null>(null);
@@ -156,7 +181,7 @@ export function ApplicationForm({
     const abort = new AbortController();
     extractAbortRef.current = abort;
 
-    setExtracting(true);
+    dispatch(setExtracting(true));
     try {
       const res = await fetch("/api/extract", {
         method: "POST",
@@ -185,7 +210,9 @@ export function ApplicationForm({
 
       const pollResult = await pollExtractionJob(data.jobId, abort.signal);
       if (pollResult.kind === "completed") {
-        setValues((prev) => extractionToFormValues(pollResult.data, prev));
+        dispatch(
+          applyExtraction(extractionToFormValues(pollResult.data, values)),
+        );
         toast.success("Fields extracted. Review before saving.");
         return;
       }
@@ -204,7 +231,7 @@ export function ApplicationForm({
         extractAbortRef.current = null;
       }
       if (!abort.signal.aborted) {
-        setExtracting(false);
+        dispatch(setExtracting(false));
       }
     }
   }
@@ -213,31 +240,11 @@ export function ApplicationForm({
     key: K,
     value: ApplicationFormValues[K],
   ) {
-    if (key === "follow_up_date" && !String(value).trim()) {
-      setFollowUpWasSuggested(false);
-    }
-    setValues((prev) => ({ ...prev, [key]: value }));
+    dispatch(setField({ key, value }));
   }
 
   function handleStatusChange(status: ApplicationStatus) {
-    const resolved = resolveAppliedFields(
-      status,
-      initialAppliedAt,
-      values.follow_up_date,
-      values.status,
-    );
-    const suggested =
-      status === "Applied" &&
-      !values.follow_up_date.trim() &&
-      resolved.follow_up_date.length > 0;
-    if (suggested) {
-      setFollowUpWasSuggested(true);
-    }
-    setValues((prev) => ({
-      ...prev,
-      status,
-      follow_up_date: resolved.follow_up_date,
-    }));
+    dispatch(statusChanged(status));
   }
 
   function handleSubmit(e: React.FormEvent) {
@@ -245,16 +252,18 @@ export function ApplicationForm({
     if (isDetailLayout && Date.now() - mountedAtRef.current < 250) {
       return;
     }
-    setError(null);
+    dispatch(setError(null));
 
     if (!emailVerified) {
-      setError("Verify your email before saving applications.");
+      dispatch(setError("Verify your email before saving applications."));
       return;
     }
 
     if (values.raw_description.length > MAX_RAW_DESCRIPTION) {
-      setError(
-        `Job description must be ${MAX_RAW_DESCRIPTION.toLocaleString()} characters or fewer.`,
+      dispatch(
+        setError(
+          `Job description must be ${MAX_RAW_DESCRIPTION.toLocaleString()} characters or fewer.`,
+        ),
       );
       return;
     }
@@ -266,7 +275,7 @@ export function ApplicationForm({
         const result = await createApplication(values);
         onPendingChange?.(false);
         if (result && "error" in result) {
-          setError(result.error);
+          dispatch(setError(result.error));
         }
         return;
       }
@@ -279,7 +288,7 @@ export function ApplicationForm({
       onPendingChange?.(false);
 
       if ("error" in result) {
-        setError(result.error);
+        dispatch(setError(result.error));
         return;
       }
 
@@ -318,24 +327,30 @@ export function ApplicationForm({
         </p>
 
         {connected ? (
-          <Button
-            type="button"
-            variant="brand"
-            onClick={handleExtract}
-            disabled={!canExtract}
-          >
-            {extracting
-              ? "Extracting…"
-              : showReExtract
-                ? "Re-extract fields"
-                : "Extract fields"}
-          </Button>
+          <>
+            <Button
+              type="button"
+              variant="brand"
+              onClick={handleExtract}
+              disabled={!canExtract}
+              aria-busy={extracting}
+            >
+              {extracting
+                ? "Extracting…"
+                : showReExtract
+                  ? "Re-extract fields"
+                  : "Extract fields"}
+            </Button>
+            <p role="status" aria-live="polite" className="sr-only">
+              {extracting ? "Extracting job fields" : ""}
+            </p>
+          </>
         ) : (
           <div className="rounded-lg border border-dashed border-border p-4">
             <p className="mb-3 text-sm text-muted-foreground">
               Connect ChatGPT to extract fields from your posting.
             </p>
-            <LoginWithChatGPT onConnected={() => setConnected(true)} />
+            <LoginWithChatGPT onConnected={() => dispatch(setConnected(true))} />
           </div>
         )}
       </CardContent>
@@ -637,6 +652,7 @@ export function ApplicationForm({
     <form
       id={formId}
       onSubmit={handleSubmit}
+      aria-describedby={error ? "application-form-error" : undefined}
       className={
         isDetailLayout
           ? "mx-auto max-w-3xl space-y-6 pb-8"
@@ -645,6 +661,7 @@ export function ApplicationForm({
     >
       {error ? (
         <p
+          id="application-form-error"
           className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive"
           role="alert"
         >

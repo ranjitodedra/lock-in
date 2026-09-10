@@ -68,6 +68,7 @@ export function LandingContent({
                   href={GITHUB_URL}
                   target="_blank"
                   rel="noopener noreferrer"
+                  aria-label="GitHub"
                 />
               }
               nativeButton={false}

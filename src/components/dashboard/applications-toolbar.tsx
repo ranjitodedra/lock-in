@@ -14,19 +14,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  APPLICATION_STATUSES,
-  type ApplicationStatus,
-  type WorkMode,
-} from "@/types/application";
+import type { DashboardFilters } from "@/lib/applications/dashboard-filters";
+import { APPLICATION_STATUSES } from "@/types/application";
 
-export type DashboardFilters = {
-  search: string;
-  status: ApplicationStatus | "all";
-  workMode: WorkMode | "all";
-  deadlineFrom: string;
-  deadlineTo: string;
-};
+export type { DashboardFilters };
 
 type ApplicationsToolbarProps = {
   filters: DashboardFilters;
@@ -101,7 +92,10 @@ export function ApplicationsToolbar({
               update("status", v as DashboardFilters["status"])
             }
           >
-            <SelectTrigger className="h-9 w-[140px] rounded-full">
+            <SelectTrigger
+              className="h-9 w-[140px] rounded-full"
+              aria-label="Filter by status"
+            >
               <SelectValue placeholder="All statuses" />
             </SelectTrigger>
             <SelectContent>
@@ -120,7 +114,10 @@ export function ApplicationsToolbar({
               update("workMode", v as DashboardFilters["workMode"])
             }
           >
-            <SelectTrigger className="h-9 w-[130px] rounded-full">
+            <SelectTrigger
+              className="h-9 w-[130px] rounded-full"
+              aria-label="Filter by work mode"
+            >
               <SelectValue placeholder="All modes" />
             </SelectTrigger>
             <SelectContent>

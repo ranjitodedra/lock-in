@@ -205,9 +205,9 @@ export function LoginBrand() {
       transition={transition}
     >
       <AppLogo width={40} height={40} priority />
-      <span className="text-lg font-semibold tracking-tight">
+      <h1 className="text-lg font-semibold tracking-tight">
         Lock-In Tracker
-      </span>
+      </h1>
     </motion.div>
   );
 }
