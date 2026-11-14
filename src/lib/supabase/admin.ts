@@ -16,7 +16,7 @@ export function createAdminClient() {
     );
   }
 
-  return createClient<Database>(env.NEXT_PUBLIC_SUPABASE_URL, serviceRoleKey, {
+  return createClient<Database>(env.SUPABASE_URL, serviceRoleKey, {
     auth: {
       autoRefreshToken: false,
       persistSession: false,

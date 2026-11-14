@@ -42,8 +42,8 @@ export default function RootLayout({
     >
       <body className="min-h-full font-sans">
         <SupabaseBrowserProvider
-          url={env.NEXT_PUBLIC_SUPABASE_URL}
-          anonKey={env.NEXT_PUBLIC_SUPABASE_ANON_KEY}
+          url={env.SUPABASE_URL}
+          anonKey={env.SUPABASE_ANON_KEY}
         >
           <ThemeProvider>
             <LockInIntro />

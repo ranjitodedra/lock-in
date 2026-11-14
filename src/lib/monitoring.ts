@@ -14,7 +14,7 @@ function sentryEnvelopeUrl(dsn: string): string | null {
 /** ponytail: no-op without DSN; swap for @sentry/nextjs later without changing call sites */
 export function reportError(error: unknown, context?: ErrorContext): void {
   const message = error instanceof Error ? error.message : String(error);
-  const dsn = process.env.NEXT_PUBLIC_SENTRY_DSN;
+  const dsn = process.env.SENTRY_DSN;
 
   if (process.env.NODE_ENV === "development") {
     console.error("[reportError]", message, context ?? {});

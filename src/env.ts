@@ -3,11 +3,11 @@ import { z } from "zod";
 const isProduction = process.env.NODE_ENV === "production";
 const isVercelProduction = isProduction && process.env.VERCEL === "1";
 
-const clientSchema = z.object({
-  NEXT_PUBLIC_SUPABASE_URL: z.string().url(),
-  NEXT_PUBLIC_SUPABASE_ANON_KEY: z.string().min(1),
-  NEXT_PUBLIC_APP_URL: z.string().url().default("http://localhost:3000"),
-  NEXT_PUBLIC_SENTRY_DSN: z.string().url().optional(),
+const appSchema = z.object({
+  SUPABASE_URL: z.string().url(),
+  SUPABASE_ANON_KEY: z.string().min(1),
+  APP_URL: z.string().url().default("http://localhost:3000"),
+  SENTRY_DSN: z.string().url().optional(),
 });
 
 const serverSchema = z.object({
@@ -33,22 +33,26 @@ function parseEnv<T extends z.ZodTypeAny>(schema: T, source: Record<string, stri
   return result.data as z.infer<T>;
 }
 
-const clientEnv = parseEnv(clientSchema, {
-  NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL,
-  NEXT_PUBLIC_SUPABASE_ANON_KEY: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
-  NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL,
-  NEXT_PUBLIC_SENTRY_DSN: process.env.NEXT_PUBLIC_SENTRY_DSN,
-});
+export function loadEnv(source: Record<string, string | undefined> = process.env) {
+  const appEnv = parseEnv(appSchema, {
+    SUPABASE_URL: source.SUPABASE_URL,
+    SUPABASE_ANON_KEY: source.SUPABASE_ANON_KEY,
+    APP_URL: source.APP_URL,
+    SENTRY_DSN: source.SENTRY_DSN,
+  });
 
-const serverEnv = parseEnv(serverSchema, {
-  SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY,
-  CRON_SECRET: process.env.CRON_SECRET,
-  CODEX_CLIENT_ID: process.env.CODEX_CLIENT_ID,
-  CODEX_MODEL: process.env.CODEX_MODEL,
-  ADMIN_EMAIL: process.env.ADMIN_EMAIL,
-});
+  const serverEnv = parseEnv(serverSchema, {
+    SUPABASE_SERVICE_ROLE_KEY: source.SUPABASE_SERVICE_ROLE_KEY,
+    CRON_SECRET: source.CRON_SECRET,
+    CODEX_CLIENT_ID: source.CODEX_CLIENT_ID,
+    CODEX_MODEL: source.CODEX_MODEL,
+    ADMIN_EMAIL: source.ADMIN_EMAIL,
+  });
 
-export const env = {
-  ...clientEnv,
-  ...serverEnv,
-};
+  return {
+    ...appEnv,
+    ...serverEnv,
+  };
+}
+
+export const env = loadEnv();

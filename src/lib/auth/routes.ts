@@ -23,7 +23,11 @@ export function safeNextPath(next: string | null | undefined): string {
 }
 
 export function appOrigin(): string {
-  return process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+  // Client bundles cannot read non-public env; use the served origin there.
+  if (typeof window !== "undefined") {
+    return window.location.origin;
+  }
+  return process.env.APP_URL ?? "http://localhost:3000";
 }
 
 export function authCallbackUrl(): string {
