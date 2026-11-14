@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { env } from "@/env";
 import { clearCodexConnection } from "@/lib/codex/session";
 import { createClient } from "@/lib/supabase/server";
 
@@ -15,8 +16,5 @@ export async function POST() {
 
   await supabase.auth.signOut();
 
-  const origin =
-    process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
-
-  return NextResponse.redirect(`${origin}/login`, { status: 303 });
+  return NextResponse.redirect(`${env.APP_URL}/login`, { status: 303 });
 }

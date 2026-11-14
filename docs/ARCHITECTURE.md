@@ -189,8 +189,9 @@ The route validates `Authorization: Bearer <CRON_SECRET>` and deletes `extractio
 
 [`src/env.ts`](../src/env.ts) validates all required variables at startup via Zod:
 
-- Client vars: Supabase URL, anon key, app URL
-- Server vars: service role key and cron secret (required on Vercel production), Codex settings, admin email
+- `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `APP_URL` (URL + anon are also injected into the browser client; RLS is the data boundary)
+- Optional `SENTRY_DSN`
+- Server-only: service role key and cron secret (required on Vercel production), Codex settings, admin email
 
 Missing required vars cause build/startup to fail immediately.
 

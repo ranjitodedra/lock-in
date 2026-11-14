@@ -100,14 +100,32 @@ All variables are documented in [`.env.example`](../.env.example) with placehold
 
 Validated at startup by [`src/env.ts`](../src/env.ts). Required for local dev:
 
-- `NEXT_PUBLIC_SUPABASE_URL`
-- `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+- `SUPABASE_URL`
+- `SUPABASE_ANON_KEY`
+- `APP_URL` (defaults to `http://localhost:3000` if unset)
 - `ADMIN_EMAIL` (your email, for admin panel access)
 
 Optional locally, required on Vercel production:
 
 - `SUPABASE_SERVICE_ROLE_KEY`
 - `CRON_SECRET`
+
+Optional: `SENTRY_DSN` (monitoring stub).
+
+`SUPABASE_URL` and `SUPABASE_ANON_KEY` are still sent to the browser (via layout-injected config) so the Supabase client can run client-side. Marking them Secret in Vercel does **not** hide them from end users. **RLS remains the data boundary.**
+
+### Operator checklist: rename after pull
+
+After pulling the Secret-compatible env rename, update local and hosted config before the next deploy:
+
+1. **`.env.local`** — rename (or recreate) keys:
+   - `SUPABASE_URL` (was public-prefixed Supabase URL)
+   - `SUPABASE_ANON_KEY` (was public-prefixed anon key)
+   - `APP_URL` (was public-prefixed app URL)
+   - `SENTRY_DSN` if you used the optional DSN (was public-prefixed)
+2. **Vercel** → Project → Settings → Environment Variables — create the new names above (mark as Secret if desired), then remove the old public-prefixed keys. Repeat for Production / Preview / Development as needed.
+3. **Redeploy** so runtime picks up the new names (legacy public-prefixed names are not read).
+4. Smoke-check: login, OAuth callback, one protected page; admin if service-role is configured.
 
 ---
 

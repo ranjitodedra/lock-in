@@ -21,16 +21,16 @@ export function loadEnvLocal() {
 
 export function getSupabaseProjectRef(env = {}) {
   const merged = { ...process.env, ...loadEnvLocal(), ...env };
-  const url = merged.NEXT_PUBLIC_SUPABASE_URL?.trim();
+  const url = merged.SUPABASE_URL?.trim();
   if (!url) {
     throw new Error(
-      "NEXT_PUBLIC_SUPABASE_URL is required (set in .env.local or environment)",
+      "SUPABASE_URL is required (set in .env.local or environment)",
     );
   }
   const hostname = new URL(url).hostname;
   const ref = hostname.split(".")[0];
   if (!ref || ref === "your-project") {
-    throw new Error(`Invalid NEXT_PUBLIC_SUPABASE_URL: ${url}`);
+    throw new Error(`Invalid SUPABASE_URL: ${url}`);
   }
   return ref;
 }

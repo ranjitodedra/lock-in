@@ -83,7 +83,7 @@ Preserved and cross-linked: `PROJECT_DECISIONS.md`, `ENGINEERING_HIGHLIGHTS.md`,
 | Finding | Action |
 |---------|--------|
 | Hardcoded admin email in `admin-check.ts` | Moved to `ADMIN_EMAIL` env var |
-| Hardcoded Supabase project ref in OAuth scripts | Derived from `NEXT_PUBLIC_SUPABASE_URL` |
+| Hardcoded Supabase project ref in OAuth scripts | Derived from `SUPABASE_URL` |
 | `.env.example` blocked by `.env*` gitignore | Fixed gitignore; `.env.example` now committable |
 | Real Codex client ID in README | Removed; points to `.env.example` |
 
