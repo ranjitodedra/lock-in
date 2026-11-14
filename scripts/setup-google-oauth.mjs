@@ -21,7 +21,7 @@ const root = resolve(__dirname, "..");
 const env = { ...process.env, ...loadEnvLocal() };
 const projectRef = getSupabaseProjectRef(env);
 const callbackUrl = `https://${projectRef}.supabase.co/auth/v1/callback`;
-const jsOrigin = env.NEXT_PUBLIC_APP_URL?.trim() || "http://localhost:3000";
+const jsOrigin = env.APP_URL?.trim() || "http://localhost:3000";
 
 function openGoogleCloudConsole(clientId) {
   if (process.platform !== "win32") {

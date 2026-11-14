@@ -6,7 +6,7 @@ import { getSupabaseProjectRef, loadEnvLocal } from "./load-env-local.mjs";
 
 const env = { ...process.env, ...loadEnvLocal() };
 const projectRef = getSupabaseProjectRef(env);
-const appUrl = env.NEXT_PUBLIC_APP_URL?.trim() || "http://localhost:3000";
+const appUrl = env.APP_URL?.trim() || "http://localhost:3000";
 const redirectTo = encodeURIComponent(`${appUrl}/auth/callback`);
 const authorizeUrl = `https://${projectRef}.supabase.co/auth/v1/authorize?provider=google&redirect_to=${redirectTo}`;
 

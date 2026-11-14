@@ -19,6 +19,8 @@ Production-only requirements (enforced when `NODE_ENV=production` and `VERCEL=1`
 
 - `.env.local` and all `.env.*.local` files are gitignored
 - [`.env.example`](../.env.example) documents every variable with placeholders — no real credentials
+- App env names are Secret-compatible (`SUPABASE_URL`, `SUPABASE_ANON_KEY`, `APP_URL`, optional `SENTRY_DSN`) so Vercel can store them as Secrets without the public-prefix warning
+- **Vercel Secret ≠ end-user secrecy:** `SUPABASE_URL` and `SUPABASE_ANON_KEY` are still injected into the browser for the Supabase client. They remain visible to users; **RLS is the data boundary**. Truly private keys (`SUPABASE_SERVICE_ROLE_KEY`, `CRON_SECRET`) stay server-only
 - Service-role key is used only in server-side code ([`src/lib/supabase/admin.ts`](../src/lib/supabase/admin.ts), cron route)
 - Admin email is a server-side env var (`ADMIN_EMAIL`), not hardcoded in source
 
@@ -124,7 +126,7 @@ Requests without a valid secret receive `401`. The cron secret is required in Ve
 [`src/lib/monitoring.ts`](../src/lib/monitoring.ts) provides a `reportError()` stub:
 
 - Development: logs to `console.error`
-- Production: fire-and-forget POST to Sentry envelope endpoint (if `NEXT_PUBLIC_SENTRY_DSN` is set)
+- Production: fire-and-forget POST to Sentry envelope endpoint (if `SENTRY_DSN` is set)
 - Full `@sentry/nextjs` SDK integration is not yet wired
 
 ---

@@ -226,7 +226,7 @@ No load testing has been performed. All figures below are **Estimated** from cod
 - Token encryption at rest for `codex_connections`
 - Server-side full-text search (GIN index exists but is not queried yet)
 - Connection pooler configuration for serverless scale
-- Sentry integration (`NEXT_PUBLIC_SENTRY_DSN` stub exists; SDK not wired)
+- Sentry integration (`SENTRY_DSN` stub exists; SDK not wired)
 - CSV export and collaboration features (v2)
 
 ---
