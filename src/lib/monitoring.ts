@@ -1,3 +1,5 @@
+import { peekBrowserSupabaseConfig } from "@/lib/supabase/browser-config";
+
 type ErrorContext = Record<string, string>;
 
 function sentryEnvelopeUrl(dsn: string): string | null {
@@ -11,10 +13,25 @@ function sentryEnvelopeUrl(dsn: string): string | null {
   }
 }
 
+function resolveSentryDsn(): string | undefined {
+  const injected = peekBrowserSupabaseConfig()?.sentryDsn;
+  if (injected) return injected;
+
+  if (typeof window !== "undefined") {
+    // Client has no non-public env; DSN only via layout injection.
+    return undefined;
+  }
+
+  // Server: validated env contract (deferred require keeps this module client-safe).
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { env } = require("@/env") as typeof import("@/env");
+  return env.SENTRY_DSN;
+}
+
 /** ponytail: no-op without DSN; swap for @sentry/nextjs later without changing call sites */
 export function reportError(error: unknown, context?: ErrorContext): void {
   const message = error instanceof Error ? error.message : String(error);
-  const dsn = process.env.SENTRY_DSN;
+  const dsn = resolveSentryDsn();
 
   if (process.env.NODE_ENV === "development") {
     console.error("[reportError]", message, context ?? {});

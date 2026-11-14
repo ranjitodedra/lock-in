@@ -44,6 +44,8 @@ export default function RootLayout({
         <SupabaseBrowserProvider
           url={env.SUPABASE_URL}
           anonKey={env.SUPABASE_ANON_KEY}
+          appUrl={env.APP_URL}
+          sentryDsn={env.SENTRY_DSN}
         >
           <ThemeProvider>
             <LockInIntro />
